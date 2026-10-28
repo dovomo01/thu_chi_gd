@@ -1,0 +1,1661 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FamilyExpense AI - Quản Lý Thu Chi Vợ Chồng</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        chong: '#2563eb',  // Xanh dương nam tính cho Chồng
+                        vo: '#db2777',     // Hồng thời thượng cho Vợ
+                        chung: '#059669',  // Xanh lá cho Quỹ Chung
+                        primary: '#0f172a',
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                        'float': '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        * {
+            -webkit-tap-highlight-color: transparent;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        /* Hiệu ứng sóng âm khi thu âm giọng nói */
+        @keyframes pulse-wave {
+            0% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(225, 29, 72, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0); }
+        }
+        .mic-recording {
+            animation: pulse-wave 1.5s infinite;
+        }
+        /* Hiệu ứng tia quét laser OCR */
+        @keyframes laser-sweep {
+            0% { top: 4%; opacity: 0.2; }
+            50% { top: 92%; opacity: 1; }
+            100% { top: 4%; opacity: 0.2; }
+        }
+        .laser-line {
+            animation: laser-sweep 2s infinite ease-in-out;
+        }
+        /* Ẩn scrollbar nhưng vẫn scroll mượt */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 flex flex-col h-full min-h-screen pb-24 md:pb-6 select-none">
+
+    <!-- TOP APP BAR -->
+    <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 py-3 flex items-center justify-between shadow-xs">
+        <div class="flex items-center space-x-2.5">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shadow-md shadow-emerald-600/20">
+                <i class="fa-solid fa-people-roof text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-sm font-extrabold tracking-tight text-slate-900 flex items-center gap-1.5 leading-none">
+                    FamilyExpense <span class="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full">AI 2.0</span>
+                </h1>
+                <p class="text-[11px] text-slate-500 font-medium mt-0.5">Sổ Thu Chi Vợ Chồng Thông Minh</p>
+            </div>
+        </div>
+
+        <!-- Tiện ích nhanh trên Header -->
+        <div class="flex items-center space-x-1">
+            <button onclick="openVoiceModal()" class="w-8 h-8 rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center text-xs transition" title="Nói để ghi sổ">
+                <i class="fa-solid fa-microphone"></i>
+            </button>
+            <label for="cameraQuickInput" class="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center justify-center text-xs cursor-pointer transition" title="Chụp hoá đơn">
+                <i class="fa-solid fa-camera"></i>
+                <input type="file" id="cameraQuickInput" accept="image/*" capture="environment" class="hidden" onchange="handleBillFile(event)">
+            </label>
+            <button onclick="openIntegrationModal()" class="w-8 h-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center text-xs transition" title="Kết nối Zalo / Sheets">
+                <i class="fa-solid fa-paper-plane"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN APP CONTENT AREA -->
+    <main class="flex-1 max-w-4xl w-full mx-auto p-4 space-y-4">
+
+        <!-- SECTION 1: TAB TỔNG QUAN (DASHBOARD) -->
+        <section id="viewDashboard" class="space-y-4">
+            
+            <!-- Bộ lọc thời gian nhanh -->
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-1.5 bg-slate-200/80 p-1 rounded-xl text-xs font-semibold">
+                    <button onclick="setTimeFilter('month')" id="btnFilterMonth" class="px-3 py-1 rounded-lg bg-white shadow-xs text-slate-800 transition">Tháng Này</button>
+                    <button onclick="setTimeFilter('last_month')" id="btnFilterLastMonth" class="px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition">Tháng Trước</button>
+                    <button onclick="setTimeFilter('all')" id="btnFilterAll" class="px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition">Tất Cả</button>
+                </div>
+                <div class="text-[11px] text-slate-500 font-medium">
+                    <span id="currentDateDisplay">Hôm nay</span>
+                </div>
+            </div>
+
+            <!-- Thẻ KPI Tổng quan -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <!-- Tổng Đã Chi -->
+                <div class="col-span-2 sm:col-span-1 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-4 shadow-soft relative overflow-hidden">
+                    <div class="relative z-10">
+                        <span class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider block">Tổng Đã Chi</span>
+                        <div id="statTotalSpent" class="text-2xl font-extrabold text-white mt-1">0 ₫</div>
+                        <div class="flex items-center justify-between text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-700/60">
+                            <span>Thực tế ví đã xuất</span>
+                            <span id="statDaChiCount" class="text-emerald-400 font-bold">0 khoản</span>
+                        </div>
+                    </div>
+                    <div class="absolute -right-4 -bottom-4 w-20 h-20 bg-emerald-500/10 rounded-full blur-xl pointer-events-none"></div>
+                </div>
+
+                <!-- Tỷ lệ Chồng Chi -->
+                <div class="bg-white rounded-2xl p-4 border border-blue-100 shadow-soft">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-bold text-blue-700 uppercase tracking-wide flex items-center gap-1">
+                            <i class="fa-solid fa-mars"></i> Chồng Chi
+                        </span>
+                        <span id="statHusbandPct" class="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700">0%</span>
+                    </div>
+                    <div id="statHusbandSpent" class="text-lg sm:text-xl font-extrabold text-blue-900 mt-1.5">0 ₫</div>
+                    <p class="text-[10px] text-slate-400 mt-1">Gánh vác chi tiêu</p>
+                </div>
+
+                <!-- Tỷ lệ Vợ Chi -->
+                <div class="bg-white rounded-2xl p-4 border border-pink-100 shadow-soft">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-bold text-pink-700 uppercase tracking-wide flex items-center gap-1">
+                            <i class="fa-solid fa-venus"></i> Vợ Chi
+                        </span>
+                        <span id="statWifePct" class="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-pink-100 text-pink-700">0%</span>
+                    </div>
+                    <div id="statWifeSpent" class="text-lg sm:text-xl font-extrabold text-pink-900 mt-1.5">0 ₫</div>
+                    <p class="text-[10px] text-slate-400 mt-1">Tay hòm chìa khóa</p>
+                </div>
+            </div>
+
+            <!-- Banner Cần Chi Sắp Tới (Alert) -->
+            <div onclick="switchView('can_chi')" class="bg-gradient-to-r from-amber-500/10 via-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl p-3.5 flex items-center justify-between cursor-pointer hover:border-amber-300 transition">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center text-sm shadow-md shadow-amber-500/30">
+                        <i class="fa-solid fa-hourglass-half"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h4 class="text-xs font-bold text-amber-950">Khoản Cần Chi Sắp Tới</h4>
+                            <span id="statUpcomingCountBadge" class="text-[10px] bg-amber-200 text-amber-900 font-extrabold px-1.5 py-0.2 rounded-full">0</span>
+                        </div>
+                        <p class="text-[11px] text-amber-800/80 mt-0.5">Tiền phòng, điện nước, học phí con...</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div id="statUpcomingAmount" class="text-sm font-black text-amber-700">0 ₫</div>
+                    <span class="text-[10px] text-amber-600 font-semibold flex items-center justify-end gap-1">
+                        Xem lịch <i class="fa-solid fa-chevron-right text-[8px]"></i>
+                    </span>
+                </div>
+            </div>
+
+            <!-- BIỂU ĐỒ TRỰC QUAN (CHART.JS) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Biểu đồ tỷ lệ Chồng vs Vợ -->
+                <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-soft">
+                    <h3 class="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
+                        <i class="fa-solid fa-chart-pie text-indigo-600"></i> Cơ Cấu Đóng Góp (Vợ vs Chồng)
+                    </h3>
+                    <div class="relative h-48 flex items-center justify-center">
+                        <canvas id="chartSpenderCanvas"></canvas>
+                    </div>
+                </div>
+
+                <!-- Biểu đồ phân bổ Danh mục -->
+                <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-soft">
+                    <h3 class="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
+                        <i class="fa-solid fa-chart-simple text-emerald-600"></i> Phân Bổ Theo Danh Mục
+                    </h3>
+                    <div class="relative h-48 flex items-center justify-center">
+                        <canvas id="chartCategoryCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lời khuyên tài chính AI -->
+            <div class="bg-gradient-to-r from-emerald-900 to-slate-900 text-white rounded-2xl p-4 shadow-soft">
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0 text-sm">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-emerald-300">Nhận xét tài chính gia đình</h4>
+                        <p id="aiFinancialInsight" class="text-[11px] text-slate-200 mt-1 leading-relaxed">
+                            Đang phân tích thói quen chi tiêu của hai vợ chồng...
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- SECTION 2: TAB 'ĐÃ CHI' (CÁC KHOẢN TIỀN THỰC TẾ ĐÃ XUẤT) -->
+        <section id="viewDaChi" class="hidden space-y-3">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Danh Sách Đã Chi
+                    </h2>
+                    <p class="text-[11px] text-slate-500">Các khoản tiền thực tế đã rút ví</p>
+                </div>
+                <button onclick="openManualModal('da_chi')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1 transition">
+                    <i class="fa-solid fa-plus"></i> Ghi Khoản Chi
+                </button>
+            </div>
+
+            <!-- Bộ lọc & Tìm kiếm -->
+            <div class="grid grid-cols-12 gap-2 bg-white p-2.5 rounded-2xl border border-slate-200/80 shadow-soft">
+                <div class="col-span-12 sm:col-span-5 relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
+                    <input type="text" id="searchDaChi" placeholder="Tìm theo tên chi tiêu..." oninput="renderDaChiList()" class="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                </div>
+                <div class="col-span-6 sm:col-span-3">
+                    <select id="filterSpenderDaChi" onchange="renderDaChiList()" class="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 text-slate-700 focus:outline-none">
+                        <option value="all">Tất cả người chi</option>
+                        <option value="chong">👨 Chồng</option>
+                        <option value="vo">👩 Vợ</option>
+                        <option value="chung">🏠 Quỹ chung</option>
+                    </select>
+                </div>
+                <div class="col-span-6 sm:col-span-4">
+                    <select id="filterCategoryDaChi" onchange="renderDaChiList()" class="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 text-slate-700 focus:outline-none">
+                        <option value="all">Tất cả danh mục</option>
+                        <option value="an_uong">🍜 Ăn uống & Chợ</option>
+                        <option value="con_cai">🍼 Con cái & Học phí</option>
+                        <option value="nha_cua">🏠 Nhà cửa & Hóa đơn</option>
+                        <option value="xang_xe">🛵 Xăng xe & Đi lại</option>
+                        <option value="y_te">💊 Y tế & Thuốc men</option>
+                        <option value="mua_sam">🛍️ Mua sắm & Tiêu dùng</option>
+                        <option value="khac">📦 Khoản khác</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- List container -->
+            <div id="containerDaChiList" class="space-y-2.5">
+                <!-- Dữ liệu render bằng JavaScript -->
+            </div>
+        </section>
+
+        <!-- SECTION 3: TAB 'CẦN CHI' (KHOẢN DỰ KIẾN / HẠN THANH TOÁN SẮP TỚI) -->
+        <section id="viewCanChi" class="hidden space-y-3">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-bold text-amber-900 flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Kế Hoạch Cần Chi
+                    </h2>
+                    <p class="text-[11px] text-slate-500">Tiền phòng, tiền điện, sữa tã con, bảo hiểm sắp đến hẹn</p>
+                </div>
+                <button onclick="openManualModal('can_chi')" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1 transition">
+                    <i class="fa-solid fa-plus"></i> Thêm Dự Trù
+                </button>
+            </div>
+
+            <!-- Banner giải thích tính năng 1 chạm -->
+            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-800 flex items-start gap-2.5">
+                <i class="fa-solid fa-lightbulb text-amber-600 mt-0.5 text-sm"></i>
+                <div class="leading-relaxed text-[11px]">
+                    <strong>Quy trình thông minh:</strong> Khi đã chuyển khoản xong, bạn chỉ cần bấm <span class="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-bold">Đã Chi</span>. Hệ thống sẽ tự động chuyển khoản đó sang sổ <b>Đã Chi</b> và cập nhật ngày thanh toán hôm nay!
+                </div>
+            </div>
+
+            <!-- List container Cần Chi -->
+            <div id="containerCanChiList" class="space-y-2.5">
+                <!-- Dữ liệu render bằng JavaScript -->
+            </div>
+        </section>
+
+        <!-- SECTION 4: TAB CÀI ĐẶT & TÍCH HỢP (ZALO BOT / GOOGLE SHEETS) -->
+        <section id="viewSettings" class="hidden space-y-4">
+            <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-soft">
+                <div class="flex items-center space-x-3 mb-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center text-lg shadow-md shadow-blue-500/20">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">Trung Tâm Tích Hợp Zalo & Google Sheets</h3>
+                        <p class="text-[11px] text-slate-500">Đồng bộ tự động 2 chiều không phụ thuộc ứng dụng trung gian</p>
+                    </div>
+                </div>
+
+                <!-- 1. Trình mô phỏng nhận lệnh Zalo Chat (Live Sandbox) -->
+                <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 mb-4">
+                    <label class="block text-xs font-bold text-slate-800 mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-terminal text-blue-600"></i> Thử nghiệm lệnh chat Zalo như nhắn trong nhóm:
+                    </label>
+                    <p class="text-[11px] text-slate-500 mb-2">Thử nhập tin nhắn giống như vợ/chồng nhắn vào nhóm chat Zalo:</p>
+                    <div class="flex gap-2">
+                        <input type="text" id="zaloTestInput" placeholder="Ví dụ: chong cafe 35k, can chi tien nha 4tr5, vo di cho 150k" class="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <button onclick="handleZaloSimulate()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold whitespace-nowrap transition">
+                            Gửi Lệnh
+                        </button>
+                    </div>
+
+                    <!-- Gợi ý nhanh -->
+                    <div class="flex flex-wrap gap-1.5 mt-2">
+                        <button onclick="quickFillZalo('chong do xang 100k')" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[10px] text-slate-600 hover:bg-slate-100">"chong do xang 100k"</button>
+                        <button onclick="quickFillZalo('vo mua bim sua cho con 450k')" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[10px] text-slate-600 hover:bg-slate-100">"vo mua bim sua 450k"</button>
+                        <button onclick="quickFillZalo('can chi tien wifi 250k')" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[10px] text-slate-600 hover:bg-slate-100">"can chi tien wifi 250k"</button>
+                    </div>
+                </div>
+
+                <!-- 2. Webhook Google Apps Script -->
+                <div class="space-y-3 text-xs">
+                    <div>
+                        <label class="block font-bold text-slate-800 mb-1">Google Apps Script Web App URL (Đồng bộ Google Sheets):</label>
+                        <div class="flex gap-2">
+                            <input type="url" id="gasUrlInput" placeholder="https://script.google.com/macros/s/AKfycb.../exec" class="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs">
+                            <button onclick="saveGasUrl()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold">Lưu</button>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-1">Khi cấu hình URL này, mỗi khi thêm khoản mới app sẽ tự POST về Google Sheet của bạn.</p>
+                    </div>
+
+                    <!-- Mã Apps Script có sẵn -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-bold text-slate-700">Mã nguồn Google Apps Script (Code.gs):</span>
+                            <button onclick="copyAppsScriptCode()" class="text-blue-600 hover:underline font-semibold text-[11px] flex items-center gap-1">
+                                <i class="fa-regular fa-copy"></i> Copy Code.gs
+                            </button>
+                        </div>
+                        <textarea id="appsScriptText" readonly class="w-full h-32 p-2.5 bg-slate-900 text-slate-200 font-mono text-[10px] rounded-xl border border-slate-800 focus:outline-none">
+function doPost(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = JSON.parse(e.postData.contents);
+    
+    // Tự động ghi hàng mới vào Google Sheet:
+    sheet.appendRow([
+      new Date(),
+      data.title || "Khoản chi",
+      data.amount || 0,
+      data.person || "chung",
+      data.type || "da_chi",
+      data.category || "khac",
+      data.date || Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd")
+    ]);
+    
+    return ContentService.createTextOutput(JSON.stringify({status: "success"}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+                        </textarea>
+                    </div>
+                </div>
+
+                <!-- 3. Sao lưu & Xuất file -->
+                <div class="mt-4 pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                    <button onclick="exportToCSV()" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-csv text-emerald-600"></i> Xuất File CSV
+                    </button>
+                    <button onclick="exportBackupJSON()" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5">
+                        <i class="fa-solid fa-cloud-arrow-down text-blue-600"></i> Tải Bản Sao Lưu JSON
+                    </button>
+                    <button onclick="resetDefaultData()" class="px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-semibold flex items-center gap-1.5">
+                        <i class="fa-solid fa-rotate-left"></i> Khôi phục dữ liệu mẫu
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MOBILE-FIRST BOTTOM NAVIGATION DOCK -->
+    <nav class="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-lg border-t border-slate-200/90 max-w-4xl mx-auto shadow-float">
+        <div class="grid grid-cols-5 items-center px-2 py-1.5 relative">
+            
+            <!-- Tab 1: Tổng quan -->
+            <button onclick="switchView('dashboard')" id="navBtn_dashboard" class="flex flex-col items-center justify-center py-1 text-emerald-600 font-bold transition">
+                <i class="fa-solid fa-house-chimney text-base"></i>
+                <span class="text-[10px] mt-0.5">Tổng quan</span>
+            </button>
+
+            <!-- Tab 2: Đã chi -->
+            <button onclick="switchView('da_chi')" id="navBtn_da_chi" class="flex flex-col items-center justify-center py-1 text-slate-400 hover:text-slate-700 transition">
+                <i class="fa-solid fa-wallet text-base"></i>
+                <span class="text-[10px] mt-0.5">Đã chi</span>
+            </button>
+
+            <!-- NÚT TRUNG TÂM NỔI: VOICE & SCAN AI -->
+            <div class="flex items-center justify-center relative -top-3">
+                <button onclick="openSmartActionModal()" class="w-13 h-13 w-12 h-12 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-lg shadow-emerald-600/30 flex items-center justify-center text-xl transition transform active:scale-95 border-2 border-white">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+
+            <!-- Tab 3: Cần chi -->
+            <button onclick="switchView('can_chi')" id="navBtn_can_chi" class="flex flex-col items-center justify-center py-1 text-slate-400 hover:text-slate-700 transition relative">
+                <i class="fa-solid fa-calendar-check text-base"></i>
+                <span class="text-[10px] mt-0.5">Cần chi</span>
+                <span id="badgeNavCanChi" class="hidden absolute top-0.5 right-4 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white"></span>
+            </button>
+
+            <!-- Tab 4: Cài đặt & Tích hợp -->
+            <button onclick="switchView('settings')" id="navBtn_settings" class="flex flex-col items-center justify-center py-1 text-slate-400 hover:text-slate-700 transition">
+                <i class="fa-solid fa-gear text-base"></i>
+                <span class="text-[10px] mt-0.5">Tích hợp</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- MODAL 1: SMART ACTION SHEET (Chọn Nhập Giọng Nói / Quét Bill / Nhập Tay) -->
+    <div id="smartActionModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+        <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-3 transform transition-all border border-slate-100">
+            <div class="w-10 h-1 bg-slate-300 rounded-full mx-auto sm:hidden mb-2"></div>
+            <h3 class="text-sm font-bold text-slate-900 text-center">Ghi Chép Thu Chi Thông Minh</h3>
+            <p class="text-xs text-slate-500 text-center">Chọn cách nhập tiện nhất cho hai vợ chồng:</p>
+
+            <div class="space-y-2 pt-2">
+                <!-- Nút Nói -->
+                <button onclick="closeSmartActionModal(); openVoiceModal();" class="w-full flex items-center p-3 rounded-2xl bg-rose-50 hover:bg-rose-100 border border-rose-200/80 transition text-left gap-3.5">
+                    <div class="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center text-lg shadow-sm shadow-rose-600/30">
+                        <i class="fa-solid fa-microphone"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-rose-950">Nói Tiếng Việt (AI Voice)</h4>
+                        <p class="text-[10px] text-rose-700">Ví dụ: "Chồng đổ xăng 200k", "Vợ mua sữa 380k"</p>
+                    </div>
+                </button>
+
+                <!-- Nút Quét Bill -->
+                <label for="cameraModalInput" class="w-full flex items-center p-3 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 cursor-pointer transition text-left gap-3.5">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow-sm shadow-emerald-600/30">
+                        <i class="fa-solid fa-camera"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-emerald-950">Quét / Chụp Hóa Đơn (AI OCR)</h4>
+                        <p class="text-[10px] text-emerald-700">Tự động đọc số tiền & đơn vị bán từ bill chụp</p>
+                    </div>
+                    <input type="file" id="cameraModalInput" accept="image/*" capture="environment" class="hidden" onchange="closeSmartActionModal(); handleBillFile(event);">
+                </label>
+
+                <!-- Nút Nhập tay -->
+                <button onclick="closeSmartActionModal(); openManualModal();" class="w-full flex items-center p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition text-left gap-3.5">
+                    <div class="w-10 h-10 rounded-xl bg-slate-700 text-white flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-keyboard"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-800">Nhập Biểu Mẫu Chi Tiết</h4>
+                        <p class="text-[10px] text-slate-500">Tự điền ghi chú, hạn thanh toán và phân loại</p>
+                    </div>
+                </button>
+            </div>
+
+            <button onclick="closeSmartActionModal()" class="w-full py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 text-center block mt-2">
+                Hủy bỏ
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL 2: GHI ÂM GIỌNG NÓI AI TIẾNG VIỆT -->
+    <div id="voiceModal" class="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl relative border border-slate-100">
+            <button onclick="closeVoiceModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <h3 class="text-sm font-bold text-slate-900">Trợ Lý Nhập Liệu Bằng Giọng Nói</h3>
+            <p class="text-xs text-slate-500">Bấm micro và nói tự nhiên bằng tiếng Việt</p>
+
+            <!-- Mic Button Animated -->
+            <div class="py-4 flex justify-center">
+                <button id="btnVoiceRecord" onclick="toggleVoiceRecording()" class="w-20 h-20 rounded-full bg-rose-600 text-white flex items-center justify-center text-3xl shadow-xl shadow-rose-600/30 transition transform active:scale-95">
+                    <i id="voiceMicIcon" class="fa-solid fa-microphone"></i>
+                </button>
+            </div>
+
+            <!-- Trạng thái nghe & câu nói transcript -->
+            <div class="bg-slate-50 rounded-2xl p-3 border border-slate-200 min-h-16 flex items-center justify-center">
+                <p id="voiceLiveText" class="text-xs text-slate-600 font-medium italic">
+                    "Hãy chạm vào micro đỏ và nói..."
+                </p>
+            </div>
+
+            <div class="text-[11px] text-slate-400 leading-normal text-left bg-slate-50 p-2.5 rounded-xl">
+                <strong class="text-slate-600">Mẫu câu nói gợi ý:</strong><br>
+                • <em>"Chồng đổ xăng hai trăm nghìn đã chi"</em><br>
+                • <em>"Vợ mua tã bỉm cho con 350k"</em><br>
+                • <em>"Cần chi tiền điện 850 ngàn"</em>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: XEM TRƯỚC VÀ XÁC NHẬN KHOẢN CHI (CONFIRMATION MODAL) -->
+    <div id="confirmParsedModal" class="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-3 relative border border-slate-100">
+            <div class="flex items-center gap-2 text-emerald-600 font-bold text-sm">
+                <i class="fa-solid fa-circle-check"></i>
+                <span>AI Đã Trích Xuất Thông Tin</span>
+            </div>
+            <p class="text-[11px] text-slate-500">Vui lòng kiểm tra lại trước khi lưu vào sổ gia đình:</p>
+
+            <div class="space-y-2.5 text-xs bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase">Nội dung chi tiêu</label>
+                    <input type="text" id="confirmTitle" class="w-full bg-white px-2.5 py-1.5 rounded-lg border border-slate-300 font-bold text-slate-800 mt-0.5">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Số tiền (VNĐ)</label>
+                        <input type="number" id="confirmAmount" class="w-full bg-white px-2.5 py-1.5 rounded-lg border border-slate-300 font-extrabold text-emerald-700 mt-0.5">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Ai chi?</label>
+                        <select id="confirmPerson" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-300 font-semibold mt-0.5">
+                            <option value="chong">👨 Chồng</option>
+                            <option value="vo">👩 Vợ</option>
+                            <option value="chung">🏠 Quỹ chung</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Trạng thái</label>
+                        <select id="confirmType" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-300 font-semibold mt-0.5">
+                            <option value="da_chi">✅ Đã chi</option>
+                            <option value="can_chi">⏳ Cần chi (Dự trù)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Danh mục</label>
+                        <select id="confirmCategory" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-300 font-semibold mt-0.5">
+                            <option value="an_uong">Ăn uống & Chợ</option>
+                            <option value="con_cai">Con cái & Học phí</option>
+                            <option value="nha_cua">Nhà cửa & Hóa đơn</option>
+                            <option value="xang_xe">Xăng xe & Đi lại</option>
+                            <option value="y_te">Y tế & Sức khỏe</option>
+                            <option value="mua_sam">Mua sắm & Tiêu dùng</option>
+                            <option value="khac">Khác</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button onclick="closeConfirmModal()" class="flex-1 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                    Bỏ qua
+                </button>
+                <button onclick="saveConfirmedExpense()" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/20">
+                    Lưu Vào Sổ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: QUÉT HÓA ĐƠN & AI OCR SCANNER -->
+    <div id="ocrModal" class="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl relative border border-slate-100 space-y-3">
+            <button onclick="closeOcrModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <h3 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                <i class="fa-solid fa-expand text-emerald-600"></i> Quét Hóa Đơn AI OCR
+            </h3>
+
+            <!-- Khung ảnh quét có hiệu ứng laser -->
+            <div class="relative rounded-2xl overflow-hidden bg-slate-950 h-52 flex items-center justify-center border border-slate-200">
+                <img id="ocrImgPreview" src="" alt="Hóa đơn" class="max-h-full max-w-full object-contain">
+                <div id="ocrLaserLine" class="laser-line absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_12px_#34d399] hidden"></div>
+                <div id="ocrScanningOverlay" class="absolute inset-0 bg-slate-950/60 flex flex-col items-center justify-center text-white text-xs gap-2 hidden">
+                    <i class="fa-solid fa-circle-notch fa-spin text-2xl text-emerald-400"></i>
+                    <span>Đang bóc tách thông tin hóa đơn...</span>
+                </div>
+            </div>
+
+            <!-- Kết quả trích xuất nhanh -->
+            <div class="space-y-2 text-xs">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase">Đơn vị bán / Nội dung</label>
+                    <input type="text" id="ocrVendor" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-medium">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Tổng tiền (VNĐ)</label>
+                        <input type="number" id="ocrTotal" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-extrabold text-emerald-700">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Người thanh toán</label>
+                        <select id="ocrSpender" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 font-semibold">
+                            <option value="vo">👩 Vợ</option>
+                            <option value="chong">👨 Chồng</option>
+                            <option value="chung">🏠 Quỹ chung</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-1">
+                <button onclick="closeOcrModal()" class="flex-1 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-100">Hủy</button>
+                <button onclick="saveOcrResult()" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/20">Lưu Ngay</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 5: NHẬP BIỂU MẪU THỦ CÔNG / SỬA KHOẢN CHI -->
+    <div id="manualEntryModal" class="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl relative border border-slate-100">
+            <button onclick="closeManualModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <h3 id="manualModalHeader" class="text-sm font-bold text-slate-900 flex items-center gap-1.5 mb-3">
+                <i class="fa-solid fa-pen-to-square text-indigo-600"></i> Ghi Khoản Chi Mới
+            </h3>
+
+            <form id="manualForm" onsubmit="handleManualFormSubmit(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="manualEditId">
+                <div>
+                    <label class="block text-slate-600 font-semibold mb-1">Tên khoản chi *</label>
+                    <input type="text" id="manualTitle" required placeholder="Ví dụ: Đóng tiền học con, Mua thực phẩm..." class="w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-slate-600 font-semibold mb-1">Số tiền (VNĐ) *</label>
+                        <input type="number" id="manualAmount" required placeholder="150000" class="w-full px-3 py-2 border rounded-xl font-bold text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-slate-600 font-semibold mb-1">Ai chi? *</label>
+                        <select id="manualPerson" class="w-full px-2.5 py-2 border rounded-xl font-semibold">
+                            <option value="chong">👨 Chồng</option>
+                            <option value="vo">👩 Vợ</option>
+                            <option value="chung">🏠 Quỹ chung</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-slate-600 font-semibold mb-1">Trạng thái *</label>
+                        <select id="manualType" class="w-full px-2.5 py-2 border rounded-xl font-semibold">
+                            <option value="da_chi">✅ Đã chi</option>
+                            <option value="can_chi">⏳ Cần chi (Dự trù)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-600 font-semibold mb-1">Danh mục *</label>
+                        <select id="manualCategory" class="w-full px-2.5 py-2 border rounded-xl font-semibold">
+                            <option value="an_uong">Ăn uống & Chợ</option>
+                            <option value="con_cai">Con cái & Học phí</option>
+                            <option value="nha_cua">Nhà cửa & Hóa đơn</option>
+                            <option value="xang_xe">Xăng xe & Đi lại</option>
+                            <option value="y_te">Y tế & Sức khỏe</option>
+                            <option value="mua_sam">Mua sắm & Tiêu dùng</option>
+                            <option value="khac">Khác</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-slate-600 font-semibold mb-1">Ngày ghi nhận</label>
+                        <input type="date" id="manualDate" class="w-full px-2.5 py-2 border rounded-xl text-slate-700">
+                    </div>
+                    <div>
+                        <label class="block text-slate-600 font-semibold mb-1">Hạn thanh toán</label>
+                        <input type="date" id="manualDueDate" class="w-full px-2.5 py-2 border rounded-xl text-slate-700">
+                    </div>
+                </div>
+
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeManualModal()" class="flex-1 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-50">Hủy</button>
+                    <button type="submit" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/20">Lưu Dữ Liệu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toastDock" class="fixed top-4 inset-x-0 z-50 flex flex-col items-center gap-2 pointer-events-none px-4"></div>
+
+    <!-- CORE JAVASCRIPT APPLICATION LOGIC -->
+    <script>
+        /**
+         * FAMILYEXPENSE AI - JAVASCRIPT APPLICATION CORE
+         * Xây dựng chuẩn theo kiến trúc Local-First, hỗ trợ NLP tiếng Việt, Web Speech API & Chart.js
+         */
+
+        // Dữ liệu mẫu thực tế ban đầu của 2 vợ chồng
+        const DEFAULT_SEED_DATA = [
+            { id: 'exp_1', title: 'Đi siêu thị VinMart cuối tuần', amount: 845000, person: 'vo', type: 'da_chi', category: 'an_uong', date: '2026-10-25', source: 'ocr' },
+            { id: 'exp_2', title: 'Đổ xăng ô tô & rửa xe', amount: 850000, person: 'chong', type: 'da_chi', category: 'xang_xe', date: '2026-10-26', source: 'voice' },
+            { id: 'exp_3', title: 'Học phí mầm non của con', amount: 3200000, person: 'chung', type: 'da_chi', category: 'con_cai', date: '2026-10-24', source: 'manual' },
+            { id: 'exp_4', title: 'Cafe sáng và ăn sáng', amount: 65000, person: 'chong', type: 'da_chi', category: 'an_uong', date: '2026-10-27', source: 'zalo' },
+            { id: 'exp_5', title: 'Mua tã bỉm & vitamin cho con', amount: 560000, person: 'vo', type: 'da_chi', category: 'con_cai', date: '2026-10-27', source: 'voice' },
+            { id: 'exp_6', title: 'Tiền điện EVN tháng 10', amount: 1280000, person: 'chung', type: 'can_chi', category: 'nha_cua', date: '2026-10-28', dueDate: '2026-11-05', source: 'manual' },
+            { id: 'exp_7', title: 'Tiêm vắc-xin nhắc lại cho bé', amount: 750000, person: 'vo', type: 'can_chi', category: 'y_te', date: '2026-10-28', dueDate: '2026-11-03', source: 'voice' },
+            { id: 'exp_8', title: 'Bảo hiểm nhân thọ quý 4', amount: 4500000, person: 'chong', type: 'can_chi', category: 'khac', date: '2026-10-28', dueDate: '2026-11-12', source: 'manual' }
+        ];
+
+        // Global State
+        let expenseList = [];
+        let activeView = 'dashboard';
+        let currentTimeFilter = 'month';
+        let voiceRecognizer = null;
+        let isListening = false;
+        let pendingParsedExpense = null;
+        let chartSpenderRef = null;
+        let chartCategoryRef = null;
+
+        // Lifecycle: Khi tài liệu tải xong
+        window.addEventListener('DOMContentLoaded', () => {
+            initStorage();
+            initCurrentDateLabel();
+            initSpeechRecognition();
+            initCharts();
+            refreshAllViews();
+        });
+
+        // 1. Storage Manager
+        function initStorage() {
+            const saved = localStorage.getItem('family_expense_db');
+            if (saved) {
+                try {
+                    expenseList = JSON.parse(saved);
+                } catch(e) {
+                    expenseList = [...DEFAULT_SEED_DATA];
+                }
+            } else {
+                expenseList = [...DEFAULT_SEED_DATA];
+                saveToStorage();
+            }
+        }
+
+        function saveToStorage() {
+            localStorage.setItem('family_expense_db', JSON.stringify(expenseList));
+            refreshAllViews();
+            triggerBackgroundSync();
+        }
+
+        function initCurrentDateLabel() {
+            const today = new Date();
+            const options = { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' };
+            const dateStr = today.toLocaleDateString('vi-VN', options);
+            const displayEl = document.getElementById('currentDateDisplay');
+            if (displayEl) displayEl.innerText = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+        }
+
+        // 2. View Switcher (Dashboard / Đã Chi / Cần Chi / Settings)
+        function switchView(viewName) {
+            activeView = viewName;
+            const views = ['dashboard', 'da_chi', 'can_chi', 'settings'];
+            views.forEach(v => {
+                const el = document.getElementById(`view${v.charAt(0).toUpperCase() + v.slice(1).replace('_', '')}`);
+                const btn = document.getElementById(`navBtn_${v}`);
+                if (v === viewName) {
+                    if (el) el.classList.remove('hidden');
+                    if (btn) {
+                        btn.classList.add('text-emerald-600', 'font-bold');
+                        btn.classList.remove('text-slate-400');
+                    }
+                } else {
+                    if (el) el.classList.add('hidden');
+                    if (btn) {
+                        btn.classList.remove('text-emerald-600', 'font-bold');
+                        btn.classList.add('text-slate-400');
+                    }
+                }
+            });
+
+            if (viewName === 'dashboard') {
+                setTimeout(() => updateCharts(), 50);
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // 3. Time Filter (Tháng này / Tháng trước / Tất cả)
+        function setTimeFilter(filter) {
+            currentTimeFilter = filter;
+            ['month', 'last_month', 'all'].forEach(f => {
+                const btn = document.getElementById(`btnFilter${f === 'month' ? 'Month' : (f === 'last_month' ? 'LastMonth' : 'All')}`);
+                if (f === filter) {
+                    btn.className = 'px-3 py-1 rounded-lg bg-white shadow-xs text-slate-800 transition font-bold';
+                } else {
+                    btn.className = 'px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition font-medium';
+                }
+            });
+            refreshAllViews();
+        }
+
+        function filterByTime(list) {
+            if (currentTimeFilter === 'all') return list;
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const currentMonth = now.getMonth(); // 0 - 11
+
+            return list.filter(item => {
+                if (!item.date) return true;
+                const d = new Date(item.date);
+                if (currentTimeFilter === 'month') {
+                    return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+                } else if (currentTimeFilter === 'last_month') {
+                    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+                    const yearOfLastMonth = currentMonth === 0 ? currentYear - 1 : currentYear;
+                    return d.getFullYear() === yearOfLastMonth && d.getMonth() === lastMonth;
+                }
+                return true;
+            });
+        }
+
+        // 4. Update Dashboard KPI & Lists
+        function refreshAllViews() {
+            const timeFiltered = filterByTime(expenseList);
+            const daChiItems = timeFiltered.filter(i => i.type === 'da_chi');
+            const canChiItems = expenseList.filter(i => i.type === 'can_chi'); // Cần chi luôn theo dõi tất cả khoản sắp tới
+
+            // Tính toán tổng số
+            let totalSpent = 0;
+            let husbandSpent = 0;
+            let wifeSpent = 0;
+            daChiItems.forEach(i => {
+                const a = Number(i.amount) || 0;
+                totalSpent += a;
+                if (i.person === 'chong') husbandSpent += a;
+                else if (i.person === 'vo') wifeSpent += a;
+            });
+
+            let upcomingTotal = 0;
+            canChiItems.forEach(i => upcomingTotal += (Number(i.amount) || 0));
+
+            // Cập nhật DOM Dashboard
+            document.getElementById('statTotalSpent').innerText = formatVND(totalSpent);
+            document.getElementById('statDaChiCount').innerText = `${daChiItems.length} khoản`;
+            document.getElementById('statHusbandSpent').innerText = formatVND(husbandSpent);
+            document.getElementById('statWifeSpent').innerText = formatVND(wifeSpent);
+            document.getElementById('statUpcomingAmount').innerText = formatVND(upcomingTotal);
+            document.getElementById('statUpcomingCountBadge').innerText = canChiItems.length;
+
+            const hPct = totalSpent > 0 ? Math.round((husbandSpent / totalSpent) * 100) : 0;
+            const wPct = totalSpent > 0 ? Math.round((wifeSpent / totalSpent) * 100) : 0;
+            document.getElementById('statHusbandPct').innerText = `${hPct}%`;
+            document.getElementById('statWifePct').innerText = `${wPct}%`;
+
+            // Badge trên navigation dock
+            const navBadge = document.getElementById('badgeNavCanChi');
+            if (navBadge) {
+                if (canChiItems.length > 0) navBadge.classList.remove('hidden');
+                else navBadge.classList.add('hidden');
+            }
+
+            renderDaChiList();
+            renderCanChiList();
+            updateCharts();
+            generateAIFinanceAdvice(daChiItems, totalSpent);
+        }
+
+        // 5. NLP TIẾNG VIỆT & TRÍ TUỆ BÓC TÁCH CÂU NÓI
+        function parseVietnameseExpenseNLP(rawText) {
+            const text = rawText.toLowerCase().trim();
+            const result = {
+                title: rawText,
+                amount: 0,
+                person: 'chung',
+                type: 'da_chi',
+                category: 'khac',
+                date: new Date().toISOString().split('T')[0]
+            };
+
+            // Phân loại Người chi
+            if (/\b(chồng|chong|anh|bố|ba|chồng chi|chong chi)\b/i.test(text)) {
+                result.person = 'chong';
+            } else if (/\b(vợ|vo|em|mẹ|má|vợ chi|vo chi)\b/i.test(text)) {
+                result.person = 'vo';
+            } else if (/\b(cả hai|ca hai|chung|gia đình|quỹ chung)\b/i.test(text)) {
+                result.person = 'chung';
+            }
+
+            // Phân loại Đã chi / Cần chi
+            if (/\b(cần chi|can chi|sắp tới|sap toi|dự kiến|du kien|dự trù|du tru|chưa chi|phải đóng|hạn)\b/i.test(text)) {
+                result.type = 'can_chi';
+            } else {
+                result.type = 'da_chi';
+            }
+
+            // Nhận diện Số tiền tiếng Việt
+            let amount = 0;
+            // Dạng chữ số: "hai trăm nghìn", "năm mươi ngàn", "một triệu rưỡi"
+            const textNumberMap = {
+                'nửa triệu': 500000,
+                'một triệu rưỡi': 1500000,
+                'hai triệu rưỡi': 2500000,
+                'ba triệu rưỡi': 3500000,
+                'hai trăm nghìn': 200000,
+                'hai trăm ngàn': 200000,
+                'ba trăm nghìn': 300000,
+                'ba trăm ngàn': 300000,
+                'năm trăm nghìn': 500000,
+                'năm trăm ngàn': 500000,
+                'tám trăm năm mươi ngàn': 850000,
+                'tám trăm năm mươi nghìn': 850000,
+                'tám trăm năm mươi': 850000,
+                'tám trăm rưỡi': 850000
+            };
+
+            for (let phrase in textNumberMap) {
+                if (text.includes(phrase)) {
+                    amount = textNumberMap[phrase];
+                    break;
+                }
+            }
+
+            if (!amount) {
+                // Regex: 4tr5, 2tr8, 1.5 triệu
+                const shortMil = text.match(/(\d+)tr(\d+)\b/i);
+                if (shortMil) {
+                    amount = parseInt(shortMil[1]) * 1000000 + parseInt(shortMil[2]) * 100000;
+                } else {
+                    const milMatch = text.match(/(\d+([.,]\d+)?)\s*(triệu|trieu|tr|củ)\b/i);
+                    if (milMatch) {
+                        amount = Math.round(parseFloat(milMatch[1].replace(',', '.')) * 1000000);
+                    } else {
+                        // Regex: 200k, 350 nghìn, 850 ngàn
+                        const thouMatch = text.match(/(\d+([.,]\d+)?)\s*(k|nghìn|nghin|ngàn|ngan|lít)\b/i);
+                        if (thouMatch) {
+                            amount = Math.round(parseFloat(thouMatch[1].replace(',', '.')) * 1000);
+                        } else {
+                            // Dạng số thuần: 50000, 200.000
+                            const plainMatch = text.match(/\b(\d{1,3}(\.\d{3})+|\d{4,9})\b/);
+                            if (plainMatch) {
+                                amount = parseInt(plainMatch[0].replace(/\./g, ''), 10);
+                            }
+                        }
+                    }
+                }
+            }
+            result.amount = amount || 100000;
+
+            // Nhận diện Danh mục
+            if (/\b(ăn|uống|chợ|siêu thị|com|cơm|bún|phở|cafe|cf|trà sữa|thực phẩm|rau|thịt|cá)\b/i.test(text)) {
+                result.category = 'an_uong';
+            } else if (/\b(con|bỉm|bim|sữa|sua|học|học phí|đồ chơi|tiêm phòng|sách|vở)\b/i.test(text)) {
+                result.category = 'con_cai';
+            } else if (/\b(xăng|xang|xe|nhớt|bảo dưỡng|rửa xe|gửi xe|grab|taxi)\b/i.test(text)) {
+                result.category = 'xang_xe';
+            } else if (/\b(điện|dien|nước|nuoc|internet|wifi|tiền nhà|phòng|rác|chung cư|quản lý)\b/i.test(text)) {
+                result.category = 'nha_cua';
+            } else if (/\b(thuốc|thuoc|khám|bệnh|y tế|bác sĩ|nha khoa|vitamin)\b/i.test(text)) {
+                result.category = 'y_te';
+            } else if (/\b(shopee|lazada|tiki|quần áo|váy|giày|mỹ phẩm|làm đẹp|spa)\b/i.test(text)) {
+                result.category = 'mua_sam';
+            }
+
+            // Rút gọn tiêu đề sạch đẹp
+            let clean = rawText
+                .replace(/\b(hôm nay|hom nay|ngày mai|vừa|đã|chi|hết|mất|mua|thanh toán)\b/gi, '')
+                .replace(/\b(chồng|vo|vợ|chong)\b/gi, '')
+                .replace(/\b(cần chi|đã chi|can chi|da chi)\b/gi, '')
+                .replace(/\b(\d+([.,]\d+)?\s*(triệu|trieu|tr|củ|k|nghìn|nghin|ngàn|ngan|lít)?)\b/gi, '')
+                .replace(/\b(hai trăm nghìn|tám trăm năm mươi ngàn|hai trăm ngàn|năm mươi ngàn)\b/gi, '')
+                .trim();
+
+            result.title = clean.length > 2 ? clean.charAt(0).toUpperCase() + clean.slice(1) : rawText;
+            return result;
+        }
+
+        // 6. Web Speech API (Giọng Nói Tiếng Việt)
+        function initSpeechRecognition() {
+            window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (window.SpeechRecognition) {
+                voiceRecognizer = new window.SpeechRecognition();
+                voiceRecognizer.continuous = false;
+                voiceRecognizer.lang = 'vi-VN';
+                voiceRecognizer.interimResults = false;
+
+                voiceRecognizer.onstart = () => {
+                    isListening = true;
+                    document.getElementById('btnVoiceRecord').classList.add('mic-recording');
+                    document.getElementById('voiceMicIcon').className = 'fa-solid fa-microphone-lines text-white';
+                    document.getElementById('voiceLiveText').innerText = "Đang lắng nghe... Hãy nói to rõ";
+                };
+
+                voiceRecognizer.onresult = (event) => {
+                    const transcript = event.results[0][0].transcript;
+                    document.getElementById('voiceLiveText').innerText = `"${transcript}"`;
+                    stopListening();
+                    setTimeout(() => {
+                        closeVoiceModal();
+                        showConfirmParsedModal(transcript, 'voice');
+                    }, 600);
+                };
+
+                voiceRecognizer.onerror = (e) => {
+                    stopListening();
+                    document.getElementById('voiceLiveText').innerText = "Không nghe rõ hoặc chưa cấp quyền Micro. Vui lòng thử lại!";
+                };
+
+                voiceRecognizer.onend = () => {
+                    stopListening();
+                };
+            }
+        }
+
+        function toggleVoiceRecording() {
+            if (!voiceRecognizer) {
+                showToast('Trình duyệt không hỗ trợ Web Speech API. Vui lòng dùng Chrome trên Android/PC hoặc Safari mới.', 'warning');
+                return;
+            }
+            if (isListening) {
+                voiceRecognizer.stop();
+            } else {
+                try { voiceRecognizer.start(); } catch(err) { voiceRecognizer.stop(); }
+            }
+        }
+
+        function stopListening() {
+            isListening = false;
+            const btn = document.getElementById('btnVoiceRecord');
+            if (btn) btn.classList.remove('mic-recording');
+            const icon = document.getElementById('voiceMicIcon');
+            if (icon) icon.className = 'fa-solid fa-microphone text-white';
+        }
+
+        // 7. Modals Controller
+        function openVoiceModal() {
+            document.getElementById('voiceModal').classList.remove('hidden');
+            document.getElementById('voiceLiveText').innerText = "Hãy chạm vào micro đỏ và nói...";
+        }
+
+        function closeVoiceModal() {
+            stopListening();
+            document.getElementById('voiceModal').classList.add('hidden');
+        }
+
+        function openSmartActionModal() {
+            document.getElementById('smartActionModal').classList.remove('hidden');
+        }
+
+        function closeSmartActionModal() {
+            document.getElementById('smartActionModal').classList.add('hidden');
+        }
+
+        function openIntegrationModal() {
+            switchView('settings');
+        }
+
+        // 8. Confirm Parsed Modal (Xem trước & Xác nhận trước khi ghi sổ)
+        function showConfirmParsedModal(rawText, source) {
+            const parsed = parseVietnameseExpenseNLP(rawText);
+            pendingParsedExpense = { ...parsed, source: source };
+
+            document.getElementById('confirmTitle').value = parsed.title;
+            document.getElementById('confirmAmount').value = parsed.amount;
+            document.getElementById('confirmPerson').value = parsed.person;
+            document.getElementById('confirmType').value = parsed.type;
+            document.getElementById('confirmCategory').value = parsed.category;
+
+            document.getElementById('confirmParsedModal').classList.remove('hidden');
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirmParsedModal').classList.add('hidden');
+            pendingParsedExpense = null;
+        }
+
+        function saveConfirmedExpense() {
+            const title = document.getElementById('confirmTitle').value.trim() || 'Khoản chi';
+            const amount = parseFloat(document.getElementById('confirmAmount').value) || 0;
+            const person = document.getElementById('confirmPerson').value;
+            const type = document.getElementById('confirmType').value;
+            const category = document.getElementById('confirmCategory').value;
+
+            const newRecord = {
+                id: 'exp_' + Date.now(),
+                title,
+                amount,
+                person,
+                type,
+                category,
+                date: new Date().toISOString().split('T')[0],
+                source: pendingParsedExpense?.source || 'voice'
+            };
+
+            expenseList.unshift(newRecord);
+            saveToStorage();
+            closeConfirmModal();
+            showToast(`✅ Đã ghi sổ: ${formatVND(amount)} - ${title}`, 'success');
+
+            if (type === 'can_chi' && activeView !== 'can_chi') {
+                switchView('can_chi');
+            } else if (type === 'da_chi' && activeView !== 'da_chi') {
+                switchView('da_chi');
+            }
+        }
+
+        // 9. Receipt Scanner & AI OCR
+        function handleBillFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('ocrImgPreview').src = e.target.result;
+                document.getElementById('ocrModal').classList.remove('hidden');
+                document.getElementById('ocrLaserLine').classList.remove('hidden');
+                document.getElementById('ocrScanningOverlay').classList.remove('hidden');
+
+                // Mô phỏng quá trình AI OCR đọc hóa đơn
+                setTimeout(() => {
+                    document.getElementById('ocrLaserLine').classList.add('hidden');
+                    document.getElementById('ocrScanningOverlay').classList.add('hidden');
+
+                    const mockReceipts = [
+                        { vendor: 'Siêu thị WinMart+ (Hóa đơn mua sắm)', total: 468000, category: 'an_uong', spender: 'vo' },
+                        { vendor: 'Petrolimex Cửa Hàng Xăng Dầu Số 12', total: 550000, category: 'xang_xe', spender: 'chong' },
+                        { vendor: 'Nhà Thuốc Long Châu - Mua Thuốc & Vitamin', total: 320000, category: 'y_te', spender: 'vo' },
+                        { vendor: 'Hóa đơn Điện Máy Xanh - Phụ kiện gia đình', total: 680000, category: 'nha_cua', spender: 'chong' }
+                    ];
+                    const picked = mockReceipts[Math.floor(Math.random() * mockReceipts.length)];
+
+                    document.getElementById('ocrVendor').value = picked.vendor;
+                    document.getElementById('ocrTotal').value = picked.total;
+                    document.getElementById('ocrSpender').value = picked.spender;
+                    showToast('📸 AI đã đọc thông tin hóa đơn!', 'info');
+                }, 1600);
+            };
+            reader.readAsDataURL(file);
+            event.target.value = '';
+        }
+
+        function closeOcrModal() {
+            document.getElementById('ocrModal').classList.add('hidden');
+        }
+
+        function saveOcrResult() {
+            const title = document.getElementById('ocrVendor').value.trim() || 'Hóa đơn mua hàng';
+            const amount = parseFloat(document.getElementById('ocrTotal').value) || 0;
+            const person = document.getElementById('ocrSpender').value;
+
+            if (amount <= 0) {
+                showToast('Số tiền không hợp lệ', 'warning');
+                return;
+            }
+
+            const newRecord = {
+                id: 'exp_' + Date.now(),
+                title,
+                amount,
+                person,
+                type: 'da_chi',
+                category: 'an_uong',
+                date: new Date().toISOString().split('T')[0],
+                source: 'ocr'
+            };
+
+            expenseList.unshift(newRecord);
+            saveToStorage();
+            closeOcrModal();
+            showToast('✅ Đã lưu hóa đơn thành công!', 'success');
+        }
+
+        // 10. Manual Form Entry
+        function openManualModal(defaultType = 'da_chi') {
+            document.getElementById('manualEditId').value = '';
+            document.getElementById('manualTitle').value = '';
+            document.getElementById('manualAmount').value = '';
+            document.getElementById('manualType').value = defaultType;
+            document.getElementById('manualDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('manualDueDate').value = '';
+            document.getElementById('manualModalHeader').innerHTML = '<i class="fa-solid fa-pen-to-square text-indigo-600"></i> Ghi Khoản Chi Mới';
+            document.getElementById('manualEntryModal').classList.remove('hidden');
+        }
+
+        function closeManualModal() {
+            document.getElementById('manualEntryModal').classList.add('hidden');
+        }
+
+        function editExpense(id) {
+            const item = expenseList.find(e => e.id === id);
+            if (!item) return;
+
+            document.getElementById('manualEditId').value = item.id;
+            document.getElementById('manualTitle').value = item.title;
+            document.getElementById('manualAmount').value = item.amount;
+            document.getElementById('manualPerson').value = item.person;
+            document.getElementById('manualType').value = item.type;
+            document.getElementById('manualCategory').value = item.category;
+            document.getElementById('manualDate').value = item.date || new Date().toISOString().split('T')[0];
+            document.getElementById('manualDueDate').value = item.dueDate || '';
+            document.getElementById('manualModalHeader').innerHTML = '<i class="fa-solid fa-pen-to-square text-indigo-600"></i> Sửa Khoản Chi';
+            document.getElementById('manualEntryModal').classList.remove('hidden');
+        }
+
+        function handleManualFormSubmit(event) {
+            event.preventDefault();
+            const editId = document.getElementById('manualEditId').value;
+            const title = document.getElementById('manualTitle').value.trim();
+            const amount = parseFloat(document.getElementById('manualAmount').value) || 0;
+            const person = document.getElementById('manualPerson').value;
+            const type = document.getElementById('manualType').value;
+            const category = document.getElementById('manualCategory').value;
+            const date = document.getElementById('manualDate').value;
+            const dueDate = document.getElementById('manualDueDate').value;
+
+            if (editId) {
+                const item = expenseList.find(e => e.id === editId);
+                if (item) {
+                    item.title = title;
+                    item.amount = amount;
+                    item.person = person;
+                    item.type = type;
+                    item.category = category;
+                    item.date = date;
+                    item.dueDate = dueDate;
+                }
+                showToast('Đã cập nhật khoản chi!', 'success');
+            } else {
+                const newRecord = {
+                    id: 'exp_' + Date.now(),
+                    title,
+                    amount,
+                    person,
+                    type,
+                    category,
+                    date,
+                    dueDate,
+                    source: 'manual'
+                };
+                expenseList.unshift(newRecord);
+                showToast('Đã thêm khoản chi thành công!', 'success');
+            }
+
+            saveToStorage();
+            closeManualModal();
+        }
+
+        // 11. Render Lists (Đã Chi & Cần Chi)
+        function getCategoryDetails(cat) {
+            const meta = {
+                an_uong: { label: 'Ăn uống', icon: 'fa-utensils', bg: 'bg-orange-100 text-orange-600' },
+                con_cai: { label: 'Con cái', icon: 'fa-baby', bg: 'bg-pink-100 text-pink-600' },
+                nha_cua: { label: 'Nhà cửa', icon: 'fa-house', bg: 'bg-indigo-100 text-indigo-600' },
+                xang_xe: { label: 'Xăng xe', icon: 'fa-motorcycle', bg: 'bg-sky-100 text-sky-600' },
+                y_te: { label: 'Y tế', icon: 'fa-briefcase-medical', bg: 'bg-red-100 text-red-600' },
+                mua_sam: { label: 'Mua sắm', icon: 'fa-bag-shopping', bg: 'bg-purple-100 text-purple-600' },
+                khac: { label: 'Khác', icon: 'fa-tag', bg: 'bg-slate-100 text-slate-600' },
+            };
+            return meta[cat] || meta.khac;
+        }
+
+        function getPersonTag(person) {
+            if (person === 'chong') {
+                return '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 inline-flex items-center gap-1"><i class="fa-solid fa-mars"></i> Chồng</span>';
+            } else if (person === 'vo') {
+                return '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 inline-flex items-center gap-1"><i class="fa-solid fa-venus"></i> Vợ</span>';
+            }
+            return '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 inline-flex items-center gap-1"><i class="fa-solid fa-people-roof"></i> Quỹ chung</span>';
+        }
+
+        function renderDaChiList() {
+            const container = document.getElementById('containerDaChiList');
+            if (!container) return;
+
+            const searchKey = (document.getElementById('searchDaChi')?.value || '').toLowerCase().trim();
+            const filterSpender = document.getElementById('filterSpenderDaChi')?.value || 'all';
+            const filterCat = document.getElementById('filterCategoryDaChi')?.value || 'all';
+
+            let items = filterByTime(expenseList).filter(i => i.type === 'da_chi');
+
+            if (searchKey) {
+                items = items.filter(i => i.title.toLowerCase().includes(searchKey));
+            }
+            if (filterSpender !== 'all') {
+                items = items.filter(i => i.person === filterSpender);
+            }
+            if (filterCat !== 'all') {
+                items = items.filter(i => i.category === filterCat);
+            }
+
+            if (items.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white rounded-2xl p-8 text-center text-slate-400 border border-slate-200/80">
+                        <i class="fa-solid fa-receipt text-3xl mb-2 text-slate-300"></i>
+                        <p class="text-xs">Không tìm thấy khoản đã chi nào phù hợp.</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = items.map(item => {
+                const cat = getCategoryDetails(item.category);
+                return `
+                    <div class="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between gap-3 hover:border-slate-300 transition">
+                        <div class="flex items-center space-x-3 min-w-0">
+                            <div class="w-9 h-9 rounded-xl flex items-center justify-center text-xs shrink-0 ${cat.bg}">
+                                <i class="fa-solid ${cat.icon}"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <h4 class="font-bold text-slate-900 text-xs truncate">${escapeHTML(item.title)}</h4>
+                                <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+                                    ${getPersonTag(item.person)}
+                                    <span class="text-[10px] text-slate-400 flex items-center gap-1">
+                                        <i class="fa-regular fa-calendar"></i> ${item.date || 'Hôm nay'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center space-x-1 shrink-0">
+                            <span class="font-black text-xs sm:text-sm text-slate-900 mr-1">${formatVND(item.amount)}</span>
+                            <button onclick="editExpense('${item.id}')" class="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg text-xs" title="Sửa">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button onclick="deleteExpenseItem('${item.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg text-xs" title="Xóa">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderCanChiList() {
+            const container = document.getElementById('containerCanChiList');
+            if (!container) return;
+
+            const items = expenseList.filter(i => i.type === 'can_chi');
+            if (items.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white rounded-2xl p-8 text-center text-slate-400 border border-slate-200/80">
+                        <i class="fa-solid fa-calendar-check text-3xl mb-2 text-slate-300"></i>
+                        <p class="text-xs">Không có khoản nào cần chi sắp tới!</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = items.map(item => {
+                const cat = getCategoryDetails(item.category);
+                return `
+                    <div class="bg-white p-3.5 rounded-2xl border border-amber-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-center space-x-3 min-w-0">
+                            <div class="w-9 h-9 rounded-xl flex items-center justify-center text-xs shrink-0 bg-amber-100 text-amber-700">
+                                <i class="fa-solid ${cat.icon}"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <h4 class="font-bold text-slate-900 text-xs">${escapeHTML(item.title)}</h4>
+                                <div class="flex items-center gap-2 mt-0.5">
+                                    ${getPersonTag(item.person)}
+                                    <span class="text-[10px] text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                        <i class="fa-regular fa-clock"></i> Hạn: ${item.dueDate || 'Sắp tới'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                            <span class="font-black text-amber-700 text-xs sm:text-sm mr-1">${formatVND(item.amount)}</span>
+                            <!-- NÚT 1 CHẠM ĐÁNH DẤU ĐÃ CHI -->
+                            <button onclick="markAsPaidOneTap('${item.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-bold shadow-xs flex items-center gap-1 transition">
+                                <i class="fa-solid fa-check"></i> Đã Chi
+                            </button>
+                            <button onclick="deleteExpenseItem('${item.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg text-xs" title="Xóa">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Tính năng 1 chạm: Chuyển 'Cần chi' sang 'Đã chi'
+        function markAsPaidOneTap(id) {
+            const item = expenseList.find(e => e.id === id);
+            if (!item) return;
+
+            item.type = 'da_chi';
+            item.date = new Date().toISOString().split('T')[0];
+            saveToStorage();
+            showToast(`🎉 Đã chuyển "${item.title}" sang Đã Chi!`, 'success');
+        }
+
+        function deleteExpenseItem(id) {
+            expenseList = expenseList.filter(e => e.id !== id);
+            saveToStorage();
+            showToast('Đã xóa khoản chi.', 'info');
+        }
+
+        // 12. Chart.js Visualization
+        function initCharts() {
+            // Chart 1: Doughnut (Chồng vs Vợ)
+            const ctx1 = document.getElementById('chartSpenderCanvas')?.getContext('2d');
+            if (ctx1) {
+                chartSpenderRef = new Chart(ctx1, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Chồng', 'Vợ', 'Quỹ chung'],
+                        datasets: [{
+                            data: [0, 0, 0],
+                            backgroundColor: ['#2563eb', '#db2777', '#059669'],
+                            borderWidth: 2,
+                            borderColor: '#ffffff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(c) {
+                                        return ` ${c.label}: ${formatVND(c.raw)}`;
+                                    }
+                                }
+                            }
+                        },
+                        cutout: '70%'
+                    }
+                });
+            }
+
+            // Chart 2: Bar Chart (Danh mục)
+            const ctx2 = document.getElementById('chartCategoryCanvas')?.getContext('2d');
+            if (ctx2) {
+                chartCategoryRef = new Chart(ctx2, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Ăn uống', 'Con cái', 'Nhà cửa', 'Xăng xe', 'Y tế', 'Mua sắm', 'Khác'],
+                        datasets: [{
+                            data: [0, 0, 0, 0, 0, 0, 0],
+                            backgroundColor: '#059669',
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    font: { size: 9 },
+                                    callback: function(v) {
+                                        return v >= 1000000 ? (v / 1000000) + 'tr' : (v / 1000) + 'k';
+                                    }
+                                }
+                            },
+                            x: { ticks: { font: { size: 9 } } }
+                        }
+                    }
+                });
+            }
+        }
+
+        function updateCharts() {
+            if (!chartSpenderRef || !chartCategoryRef) return;
+
+            const timeItems = filterByTime(expenseList).filter(i => i.type === 'da_chi');
+            let chong = 0, vo = 0, chung = 0;
+            const catMap = { an_uong: 0, con_cai: 0, nha_cua: 0, xang_xe: 0, y_te: 0, mua_sam: 0, khac: 0 };
+
+            timeItems.forEach(i => {
+                const amt = Number(i.amount) || 0;
+                if (i.person === 'chong') chong += amt;
+                else if (i.person === 'vo') vo += amt;
+                else chung += amt;
+
+                if (catMap.hasOwnProperty(i.category)) catMap[i.category] += amt;
+                else catMap.khac += amt;
+            });
+
+            chartSpenderRef.data.datasets[0].data = [chong, vo, chung];
+            chartSpenderRef.update();
+
+            chartCategoryRef.data.datasets[0].data = [
+                catMap.an_uong, catMap.con_cai, catMap.nha_cua, catMap.xang_xe, catMap.y_te, catMap.mua_sam, catMap.khac
+            ];
+            chartCategoryRef.update();
+        }
+
+        function generateAIFinanceAdvice(daChiItems, totalSpent) {
+            const adviceEl = document.getElementById('aiFinancialInsight');
+            if (!adviceEl) return;
+
+            if (totalSpent === 0) {
+                adviceEl.innerText = "Chưa có đủ số liệu tháng này. Hãy bấm Micro hoặc chụp bill để hai vợ chồng cùng bắt đầu ghi sổ!";
+                return;
+            }
+
+            const catMap = {};
+            daChiItems.forEach(i => catMap[i.category] = (catMap[i.category] || 0) + (Number(i.amount) || 0));
+            let topCat = 'an_uong', maxAmt = 0;
+            for (let c in catMap) {
+                if (catMap[c] > maxAmt) { maxAmt = catMap[c]; topCat = c; }
+            }
+
+            const catDetails = getCategoryDetails(topCat);
+            const topPct = Math.round((maxAmt / totalSpent) * 100);
+
+            let msg = `Tháng này nhóm <b>${catDetails.label}</b> đang chiếm ngân sách lớn nhất với <b>${formatVND(maxAmt)} (${topPct}%)</b>. `;
+            if (topPct > 45) {
+                msg += `Khoản này đang vượt mức khuyến nghị 40% chi tiêu sinh hoạt, hai vợ chồng nên cân đối lại trong các tuần tới.`;
+            } else {
+                msg += `Cơ cấu chi tiêu của hai vợ chồng phân bổ rất đồng đều và hợp lý. Tiếp tục phát huy nhé!`;
+            }
+            adviceEl.innerHTML = msg;
+        }
+
+        // 13. Zalo Bot Sandbox & Google Sheets Sync
+        function quickFillZalo(cmd) {
+            document.getElementById('zaloTestInput').value = cmd;
+        }
+
+        function handleZaloSimulate() {
+            const input = document.getElementById('zaloTestInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            const parsed = parseVietnameseExpenseNLP(msg);
+            const newRecord = {
+                id: 'exp_' + Date.now(),
+                title: parsed.title,
+                amount: parsed.amount,
+                person: parsed.person,
+                type: parsed.type,
+                category: parsed.category,
+                date: new Date().toISOString().split('T')[0],
+                source: 'zalo'
+            };
+
+            expenseList.unshift(newRecord);
+            saveToStorage();
+            input.value = '';
+            showToast(`🤖 [Zalo Bot] Đã ghi nhận: ${formatVND(parsed.amount)} cho "${parsed.title}"`, 'success');
+        }
+
+        function saveGasUrl() {
+            const url = document.getElementById('gasUrlInput').value.trim();
+            localStorage.setItem('gas_webhook_url', url);
+            showToast('Đã lưu Webhook URL!', 'success');
+        }
+
+        function copyAppsScriptCode() {
+            const code = document.getElementById('appsScriptText').value;
+            const temp = document.createElement('textarea');
+            temp.value = code;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+            showToast('📋 Đã sao chép mã Code.gs!', 'success');
+        }
+
+        async function triggerBackgroundSync() {
+            const webhookUrl = localStorage.getItem('gas_webhook_url');
+            if (!webhookUrl || expenseList.length === 0) return;
+
+            try {
+                const latest = expenseList[0];
+                await fetch(webhookUrl, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(latest)
+                });
+            } catch(e) {
+                // Background sync silent fail
+            }
+        }
+
+        // 14. Utilities: Export & Backup
+        function exportToCSV() {
+            if (expenseList.length === 0) {
+                showToast('Không có dữ liệu để xuất', 'warning');
+                return;
+            }
+            let csv = "\uFEFFID,Tên Khoản Chi,Số Tiền,Người Chi,Trạng Thái,Danh Mục,Ngày,Hạn,Nguồn\n";
+            expenseList.forEach(e => {
+                csv += `"${e.id}","${(e.title || '').replace(/"/g, '""')}",${e.amount},"${e.person}","${e.type}","${e.category}","${e.date}","${e.dueDate || ''}","${e.source || ''}"\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            downloadFile(blob, `FamilyExpense_Export_${new Date().toISOString().split('T')[0]}.csv`);
+            showToast('Đã xuất file CSV!', 'success');
+        }
+
+        function exportBackupJSON() {
+            const blob = new Blob([JSON.stringify(expenseList, null, 2)], { type: 'application/json' });
+            downloadFile(blob, `FamilyExpense_Backup_${new Date().toISOString().split('T')[0]}.json`);
+            showToast('Đã tải file sao lưu JSON!', 'success');
+        }
+
+        function downloadFile(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        function resetDefaultData() {
+            expenseList = [...DEFAULT_SEED_DATA];
+            saveToStorage();
+            showToast('Đã khôi phục dữ liệu mẫu!', 'info');
+        }
+
+        function formatVND(amt) {
+            return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amt || 0);
+        }
+
+        function escapeHTML(str) {
+            const div = document.createElement('div');
+            div.innerText = str;
+            return div.innerHTML;
+        }
+
+        function showToast(msg, type = 'info') {
+            const dock = document.getElementById('toastDock');
+            const toast = document.createElement('div');
+
+            let bg = 'bg-slate-900 text-white';
+            let icon = 'fa-circle-info';
+            if (type === 'success') {
+                bg = 'bg-emerald-600 text-white shadow-emerald-600/30';
+                icon = 'fa-circle-check';
+            } else if (type === 'warning') {
+                bg = 'bg-amber-600 text-white shadow-amber-600/30';
+                icon = 'fa-triangle-exclamation';
+            }
+
+            toast.className = `pointer-events-auto flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-float text-xs font-semibold transform transition-all duration-300 -translate-y-4 opacity-0 ${bg}`;
+            toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${msg}</span>`;
+
+            dock.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.remove('-translate-y-4', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('-translate-y-2', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3200);
+        }
+    </script>
+</body>
+</html>
